@@ -19,6 +19,8 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -44,13 +46,19 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+uint8_t output_word = 1 << 7;
+uint8_t receive_word1;
+uint8_t receive_word2;
+uint16_t adc_value;
+const float ADC_RESOLUTION = 1023.0; 	// 10-bit resolution
+const int PWM_ARR = 48000; 				// PWM Auto-Reload Register Value
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-
+void get_adc(uint16_t *adc_value);
+void output_pwm();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -87,17 +95,24 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_SPI1_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
-
+  HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_SET);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  get_adc(&adc_value);
+	  output_pwm();
+	  HAL_Delay(50);
   }
   /* USER CODE END 3 */
 }
@@ -143,7 +158,19 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+void get_adc(uint16_t *adc_value) {
+	HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_RESET);
+	HAL_SPI_TransmitReceive(&hspi1, &output_word, &receive_word1, 1, 100);
+	HAL_SPI_TransmitReceive(&hspi1, &output_word, &receive_word2, 1, 100);
+	HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_SET);
+	*adc_value = ((receive_word1 & 3) << 8) | receive_word2;
+}
 
+void output_pwm() {
+	float duty_cycle_percent = 5.0f + (5.0f / ADC_RESOLUTION)*adc_value;
+	uint32_t compare_register_value = (duty_cycle_percent/100.0)*PWM_ARR;
+	htim1.Instance->CCR1 = compare_register_value;
+}
 /* USER CODE END 4 */
 
 /**
