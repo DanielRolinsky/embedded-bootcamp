@@ -46,19 +46,18 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-uint8_t output_word = 1 << 7;
-uint8_t receive_word1;
-uint8_t receive_word2;
+uint8_t output_word[] = {1, 1 << 7, 0};
+uint8_t receive_word[3];
 uint16_t adc_value;
 const float ADC_RESOLUTION = 1023.0; 	// 10-bit resolution
-const int PWM_ARR = 48000; 				// PWM Auto-Reload Register Value
+const int PWM_ARR = 64000; 				// PWM Auto-Reload Register Value
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-void get_adc(uint16_t *adc_value);
-void output_pwm();
+uint16_t get_adc();
+void output_pwm(uint16_t adc_value);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -110,8 +109,8 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  get_adc(&adc_value);
-	  output_pwm();
+	  adc_value = get_adc();
+	  output_pwm(adc_value);
 	  HAL_Delay(50);
   }
   /* USER CODE END 3 */
@@ -158,18 +157,15 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-void get_adc(uint16_t *adc_value) {
+uint16_t get_adc() {
 	HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_RESET);
-	HAL_SPI_TransmitReceive(&hspi1, &output_word, &receive_word1, 1, 100);
-	HAL_SPI_TransmitReceive(&hspi1, &output_word, &receive_word2, 1, 100);
+	HAL_SPI_TransmitReceive(&hspi1, output_word, receive_word, 3, 100);
 	HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_SET);
-	*adc_value = ((receive_word1 & 3) << 8) | receive_word2;
+	return ((receive_word[1] & 3) << 8) | receive_word[2];
 }
 
-void output_pwm() {
-	float duty_cycle_percent = 5.0f + (5.0f / ADC_RESOLUTION)*adc_value;
-	uint32_t compare_register_value = (duty_cycle_percent/100.0)*PWM_ARR;
-	htim1.Instance->CCR1 = compare_register_value;
+void output_pwm(uint16_t adc_value) {
+	htim1.Instance->CCR1 = (int)(((5.0 + (5.0 / ADC_RESOLUTION)*adc_value)/100)*PWM_ARR);
 }
 /* USER CODE END 4 */
 
